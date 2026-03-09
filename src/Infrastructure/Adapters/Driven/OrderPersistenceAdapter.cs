@@ -12,7 +12,7 @@ public class OrderPersistenceAdapter: IOrderPersistencePort
     {
         this._orderDbContext = orderDbContext;
     }
-    public Task Save(Order order)
+    public Task CreateOrder(Order order)
     {
         _orderDbContext.Add(order);
         return _orderDbContext.SaveChangesAsync();

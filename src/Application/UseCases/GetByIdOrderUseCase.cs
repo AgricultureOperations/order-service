@@ -1,10 +1,10 @@
 ﻿using Domain.Models;
 using Domain.Ports.Driven;
-using Microsoft.VisualBasic;
+using Domain.Ports.Driving;
 
 namespace Application.UseCases;
 
-public class GetByIdOrderUseCase
+public class GetByIdOrderUseCase: IGetOrderByIdUseCase
 {
     private readonly IOrderPersistencePort _orderPersistencePort;
 

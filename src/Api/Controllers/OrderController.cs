@@ -25,7 +25,7 @@ public class OrderController: ControllerBase
     [HttpPost]
     public async Task<IActionResult> Store(Guid customerId, decimal total)
     {
-        var order = await _createOrder.Execute(customerId,total);
-        return Ok(order);
+        await _createOrder.Execute(customerId,total);
+        return Ok();
     }
 }
