@@ -8,9 +8,19 @@ namespace Api.Controllers;
 public class OrderController: ControllerBase
 {
     private readonly CreateOrder _createOrder;
-    public OrderController(CreateOrder createOrder)
+    private readonly GetByIdOrderUseCase _getByIdOrderUseCase;
+    public OrderController(CreateOrder createOrder,GetByIdOrderUseCase getByIdOrderUseCase)
     {
         this._createOrder = createOrder;
+        this._getByIdOrderUseCase = getByIdOrderUseCase;
+    }
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        var order = await _getByIdOrderUseCase.Execute(id);
+        if (order == null)
+            return NotFound();
+        return Ok(order);
     }
     [HttpPost]
     public async Task<IActionResult> Store(Guid customerId, decimal total)
