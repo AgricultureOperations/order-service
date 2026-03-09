@@ -18,6 +18,8 @@ This architecture allows the business logic to remain independent from framework
 
 - Dependency inversion between layers
 
+- SQLite persistence layer
+
 - REST API endpoints for order management
 
 - Extensible architecture for future microservices
@@ -33,9 +35,11 @@ This architecture allows the business logic to remain independent from framework
 
 - ASP.NET Core Web API
 
-- Hexagonal Architecture (Ports & Adapters)
+- SQLite
 
-Built using the .NET and ASP.NET Core.
+- Entity Framework Core
+
+- Hexagonal Architecture (Ports & Adapters)
 
 ---
 
@@ -51,50 +55,29 @@ API → Application → Domain
 
 ### Layers
 
-#### Domain
-Contains:
+- Domain
+  Contains the core business entities, interfaces(Ports) and models
 
-- Core business entities
+- Application
+  Contains the use cases that coordinates business operations.
 
-- Domain models
+- Infrastructure
+  Contains implementations of domain ports such as:
+  - Persistence adapters
 
-- Ports (interfaces)
+  - External service integrations
 
-This layer has no dependencies on frameworks.
+  - Messaging adapters
 
-#### Application
-Contains:
+- API
+  Responsible for:
+  - HTTP controllers
 
+  - Request handling
 
-- Use cases
+  - Routing
 
-- Application services
-
-- Business workflows
-
-It coordinates domain operations and interacts with domain ports.
-
-#### Infrastructure
-Contains implementations of domain ports such as:
-
-
-- Persistence adapters
-
-- External service integrations
-
-- Messaging adapters
-
-#### API
-Responsible for:
-
-
-- HTTP controllers
-
-- Request handling
-
-- Routing
-
-- Dependency injection configuration
+  - Dependency injection configuration
 
 ---
 
@@ -128,9 +111,13 @@ order-service/
     │        └── Driving/
     │
     └── Infrastructure/
-        └── Adapters/
-             └── Driven/
-                  └── OrderPersistenceAdapter.cs
+        │── Adapters/
+        │    └── Driven/
+        │         └── OrderPersistenceAdapter.cs
+        │── Migrations/
+        │
+        └── Persistence/
+             └── OrderDbContext.cs
 ```
 
 ---
@@ -156,8 +143,25 @@ IOrderPersistencePort (Domain Port)
   │
   ▼
 OrderPersistenceAdapter (Infrastructure Adapter)
+  │
+  ▼
+SQLite Database
 ```
 This ensures the domain layer remains independent of infrastructure details.
+
+---
+
+## 🗄 Database
+
+The service uses SQLite as a lightweight embedded database for local development.
+
+Example connection string:
+
+```bash
+Data Source=orders.db
+```
+
+The database is managed via Entity Framework Core.
 
 ---
 
