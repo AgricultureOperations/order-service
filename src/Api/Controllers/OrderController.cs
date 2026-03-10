@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Application.UseCases;
+using Domain.Entities;
 
 namespace Api.Controllers;
 
@@ -23,9 +24,9 @@ public class OrderController: ControllerBase
         return Ok(order);
     }
     [HttpPost]
-    public async Task<IActionResult> Store(Guid customerId, decimal total)
+    public async Task<IActionResult> Store([FromBody]CreateOrderRequest request)
     {
-        await _createOrder.Execute(customerId,total);
-        return Ok();
+        var order = await _createOrder.Execute(request.customerId,request.total);
+        return Ok(order);
     }
 }
