@@ -4,11 +4,11 @@ using Domain.Ports.Driving;
 
 namespace Application.UseCases;
 
-public class CreateOrder: ICreateOrderUseCase
+public class CreateOrderUseCase: ICreateOrderUseCase
 {
     private readonly IOrderPersistencePort _orderPersistencePort;
 
-    public CreateOrder(IOrderPersistencePort orderPersistencePort)
+    public CreateOrderUseCase(IOrderPersistencePort orderPersistencePort)
     {
         this._orderPersistencePort = orderPersistencePort;       
     }

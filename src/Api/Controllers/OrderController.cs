@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Application.UseCases;
+using Domain.Ports.Driving;
 using Domain.Entities;
 
 namespace Api.Controllers;
@@ -8,11 +8,11 @@ namespace Api.Controllers;
 [Route("api/orders")]
 public class OrderController: ControllerBase
 {
-    private readonly CreateOrder _createOrder;
-    private readonly GetByIdOrderUseCase _getByIdOrderUseCase;
-    public OrderController(CreateOrder createOrder,GetByIdOrderUseCase getByIdOrderUseCase)
+    private readonly ICreateOrderUseCase _createOrderUseCase;
+    private readonly IGetOrderByIdUseCase _getByIdOrderUseCase;
+    public OrderController(ICreateOrderUseCase createOrderUseCase,IGetOrderByIdUseCase getByIdOrderUseCase)
     {
-        this._createOrder = createOrder;
+        this._createOrderUseCase = createOrderUseCase;
         this._getByIdOrderUseCase = getByIdOrderUseCase;
     }
     [HttpGet("{id}")]
@@ -26,7 +26,7 @@ public class OrderController: ControllerBase
     [HttpPost]
     public async Task<IActionResult> Store([FromBody]CreateOrderRequest request)
     {
-        var order = await _createOrder.Execute(request.customerId,request.total);
+        var order = await _createOrderUseCase.Execute(request.customerId,request.total);
         return Ok(order);
     }
 }
