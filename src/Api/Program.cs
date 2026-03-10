@@ -8,6 +8,8 @@ using Application.UserCases;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.WebHost.UseUrls("http://0.0.0.0:8080");
+
 builder.Services.AddControllers();
 
 builder.Services.AddDbContext<OrderDbContext>(options =>
@@ -21,6 +23,12 @@ builder.Services.AddScoped<IUpdateOrderUseCase,UpdateOrderUseCase>();
 builder.Services.AddScoped<IDeleteOrderUseCase,DeleteOrderUseCase>();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
+    db.Database.Migrate();
+}
 
 app.MapControllers();
 app.Run();
