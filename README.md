@@ -6,25 +6,32 @@ The service is built using <strong>ASP.NET Core Web API</strong> with <strong>.N
 
 This architecture allows the business logic to remain independent from frameworks, databases, and external technologies.
 </p>
+
 ---
 
 ## 🚀 Features
 
-- Create orders for agricultural operations
-
-- Clean separation between domain, application, infrastructure, and API layers
+- Full CRUD Operations for agricultural orders
 
 - Hexagonal architecture (Ports & Adapters)
+
+- Clean separation between domain, application, infrastructure, and API layers
 
 - Dependency inversion between layers
 
 - SQLite persistence layer
 
-- REST API endpoints for order management
+- Entity Framework Core of ORM
 
-- Extensible architecture for future microservices
+- RESTFul API endpoints for order management
 
-- Clear separation of business logic and infrastructure
+- Docker containerization support
+
+- Automatic database migrations on application startup
+
+- Microservice-ready architecture
+
+- Easily extensible for future services
 ---
 
 ## 🛠 Tech Stack
@@ -38,6 +45,8 @@ This architecture allows the business logic to remain independent from framework
 - SQLite
 
 - Entity Framework Core
+
+- Docker
 
 - Hexagonal Architecture (Ports & Adapters)
 
@@ -88,32 +97,28 @@ order-service/
 │
 ├── order-service.sln
 ├── README.md
-│
+│── Dockerfile
+│── .dockerignore
 └── src/
     │
     ├── Api/
-    │   ├── Controllers/
-    │   │   └── OrderController.cs
+    │   ├── Controllers/        
     │   ├── Program.cs
     │   └── appsettings.json
     │
     ├── Application/
     │   └── UseCases/
-    │        └── CreateOrder.cs
     │
     ├── Domain/
     │   ├── Models/
-    │   │    └── Order.cs
     │   │
     │   └── Ports/
     │        ├── Driven/
-    │        │    └── IOrderPersistencePort.cs
     │        └── Driving/
     │
     └── Infrastructure/
         │── Adapters/
         │    └── Driven/
-        │         └── OrderPersistenceAdapter.cs
         │── Migrations/
         │
         └── Persistence/
@@ -162,6 +167,29 @@ Data Source=orders.db
 ```
 
 The database is managed via Entity Framework Core.
+
+---
+
+## 🐳 Running with Docker
+
+The service can be built and executed as a Docker container.
+
+### Build the image
+
+```bash
+docker build -t order-service .
+```
+
+### Run the container
+
+```bash
+docker run -p 8080:8080 order-service
+```
+
+The API will be available at:
+```bash
+http://localhost:8080
+```
 
 ---
 
@@ -225,11 +253,13 @@ https://github.com/AgricultureOperations/frontend
 
 - ✅ Clear separation of concerns 
 
+- ✅ Docker-ready deployment
+
 ---
 
 ## 🔮 Future Improvements
 
-- Add order retrieval endpoints
+- Add order filtering and pagination
 
 - Implement order update and cancellation
 
@@ -237,9 +267,13 @@ https://github.com/AgricultureOperations/frontend
 
 - Add unit and integration tests
 
+- Introduce API documentation with OpenAPI/Swagger
+
 - Introduce containerization with Docker
 
 - Add CI/CD pipeline with GitHub Actions
+
+- Add container orchestration support
 
 ---
 
