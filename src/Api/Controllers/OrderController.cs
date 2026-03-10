@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Domain.Ports.Driving;
 using Domain.Entities;
+using Domain;
 
 namespace Api.Controllers;
 
@@ -10,11 +11,31 @@ public class OrderController: ControllerBase
 {
     private readonly ICreateOrderUseCase _createOrderUseCase;
     private readonly IGetOrderByIdUseCase _getByIdOrderUseCase;
-    public OrderController(ICreateOrderUseCase createOrderUseCase,IGetOrderByIdUseCase getByIdOrderUseCase)
+    private readonly IGetOrdersUseCase _getOrdersUseCase;
+    private readonly IUpdateOrderUseCase _updateOrderUseCase;
+    private readonly IDeleteOrderUseCase _deleteOrderUseCase;
+    public OrderController(
+        ICreateOrderUseCase createOrderUseCase
+        ,IGetOrderByIdUseCase getByIdOrderUseCase
+        ,IGetOrdersUseCase getOrdersUseCase
+        ,IUpdateOrderUseCase updateOrderUseCase
+        ,IDeleteOrderUseCase deleteOrderUseCase
+        )
     {
         this._createOrderUseCase = createOrderUseCase;
         this._getByIdOrderUseCase = getByIdOrderUseCase;
+        this._getOrdersUseCase = getOrdersUseCase;
+        this._updateOrderUseCase = updateOrderUseCase;
+        this._deleteOrderUseCase = deleteOrderUseCase;
     }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody]CreateOrderRequest Request)
+    {
+        var order = await _createOrderUseCase.Execute(Request);
+        return Ok(order);
+    }
+
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(Guid id)
     {
@@ -23,10 +44,29 @@ public class OrderController: ControllerBase
             return NotFound();
         return Ok(order);
     }
-    [HttpPost]
-    public async Task<IActionResult> Store([FromBody]CreateOrderRequest request)
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
     {
-        var order = await _createOrderUseCase.Execute(request.customerId,request.total);
+        var orders = await _getOrdersUseCase.Execute();
+        return Ok(orders);
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(Guid Id,[FromBody] UpdateOrderRequest Request)
+    {
+        var order = await _updateOrderUseCase.Execute(Id,Request);
+        if ( order == null )
+            return NotFound();
+        return Ok(order);
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(Guid Id)
+    {
+        var order = await _deleteOrderUseCase.Execute(Id);
+        if ( order == null )
+            return NotFound();
         return Ok(order);
     }
 }

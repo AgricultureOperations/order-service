@@ -1,8 +1,9 @@
 ﻿using Domain.Models;
+using Domain.Entities;
 
 namespace Domain.Ports.Driving;
 
 public interface ICreateOrderUseCase
 {
-    Task<Order> Execute(Guid customerId, decimal total); 
+    Task<Order> Execute(CreateOrderRequest Request); 
 }

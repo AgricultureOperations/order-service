@@ -16,4 +16,22 @@ public class Order
         this.CustomerId = CustomerId;
         this.total = total;
     }
+    
+    public void UpdateTotal(decimal total)
+    {
+        if (total < 0) throw new ArgumentException("Total cannot be negative");
+        this.total = total;
+    }
+
+    public void UpdateCustomerId(Guid customerId)
+    {
+        this.CustomerId = customerId;
+    }
+
+    public void UpdateOrder(Guid customerId,decimal total)
+    {
+        // Combine multiple updates in one method if needed
+        UpdateCustomerId(customerId);
+        UpdateTotal(total);
+    }
 }
