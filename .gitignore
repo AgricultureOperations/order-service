@@ -43,6 +43,10 @@ secrets.json
 *.db
 *.sqlite
 *.sqlite3
+# SQLite
+*.db
+*.db-shm
+*.db-wal
 
 # Temporary files
 *.tmp
