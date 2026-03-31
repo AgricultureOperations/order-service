@@ -3,8 +3,6 @@ using Application.UseCases;
 using Domain.Ports.Driven;
 using Infrastructure.Adapters.Driven;
 using Infrastructure.Persistence;
-using Domain.Ports.Driving;
-using Application.UserCases;
 
 var builder = WebApplication.CreateBuilder(args);
 

@@ -20,12 +20,16 @@ public class OrderPersistenceAdapter: IOrderPersistencePort
 
     public async Task<Order?> GetById(Guid id)
     {
-        return await _orderDbContext.Orders.FirstOrDefaultAsync(o => o.Id == id);
+        return await _orderDbContext.Orders
+            .Include(o => o.Status)
+            .FirstOrDefaultAsync(o => o.Id == id);
     }
 
     public async Task<IEnumerable<Order>?> GetAll()
     {
-        return await _orderDbContext.Orders.ToListAsync();
+        return await _orderDbContext.Orders
+            .Include(o => o.Status)
+            .ToListAsync();
     }
 
     public async Task UpdateOrder(Guid id,Order order)

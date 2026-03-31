@@ -4,7 +4,10 @@ public class Order
 {
     public Guid Id {get; private set;}    
     public Guid CustomerId {get; private set;}    
-    public decimal total {get; private set;}    
+    public decimal total {get; private set;} 
+    public DateTime CreatedAt { get; private set; }
+    public int StatusId { get; private set;}
+    public OrderStatus Status { get; private set; }   
     
     public Order() {}
     
@@ -13,6 +16,13 @@ public class Order
         this.Id = Guid.NewGuid();
         this.CustomerId = CustomerId;
         this.total = total;
+        this.CreatedAt = DateTime.UtcNow;
+    }
+
+    public void UpdateStatus(OrderStatus status)
+    {
+        Status = status;
+        StatusId = status.Id;
     }
     
     public void UpdateTotal(decimal total)
