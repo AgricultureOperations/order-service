@@ -1,6 +1,4 @@
-﻿using System.Collections.Concurrent;
-
-namespace Domain.Models;
+﻿namespace Domain.Entities;
 
 public class Order
 {

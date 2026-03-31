@@ -1,9 +1,8 @@
-﻿using Domain.Entities;
-using Domain.Models;
+﻿using Application.DTOs;
+using Domain.Entities;
 using Domain.Ports.Driven;
-using Domain.Ports.Driving;
 
-namespace Application.UserCases;
+namespace Application.UseCases;
 
 public class UpdateOrderUseCase: IUpdateOrderUseCase
 {

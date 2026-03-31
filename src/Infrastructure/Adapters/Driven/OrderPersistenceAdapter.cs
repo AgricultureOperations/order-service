@@ -1,5 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Domain.Models;
+using Domain.Entities;
 using Domain.Ports.Driven;
 using Infrastructure.Persistence;
 

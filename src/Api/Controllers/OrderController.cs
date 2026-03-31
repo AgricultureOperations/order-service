@@ -1,7 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Domain.Ports.Driving;
-using Domain.Entities;
-using Domain;
+﻿using Application.UseCases;
+using Application.DTOs;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers;
 

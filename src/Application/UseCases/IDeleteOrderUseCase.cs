@@ -1,6 +1,6 @@
-﻿using Domain.Models;
+﻿using Domain.Entities;
 
-namespace Domain.Ports.Driving;
+namespace Application.UseCases;
 
 public interface IDeleteOrderUseCase
 {

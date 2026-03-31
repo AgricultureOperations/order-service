@@ -1,6 +1,5 @@
-﻿using Domain.Models;
+﻿using Domain.Entities;
 using Domain.Ports.Driven;
-using Domain.Ports.Driving;
 
 namespace Application.UseCases;
 
