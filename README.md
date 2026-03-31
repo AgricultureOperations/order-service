@@ -21,7 +21,7 @@ This architecture allows the business logic to remain independent from framework
 
 - SQLite persistence layer
 
-- Entity Framework Core of ORM
+- Entity Framework Core as ORM
 
 - RESTFul API endpoints for order management
 
@@ -57,18 +57,46 @@ This architecture allows the business logic to remain independent from framework
 The service follows Hexagonal Architecture to isolate the domain logic from external dependencies.
 
 ```bash
-API → Application → Domain
-          ↑
-    Infrastructure
+        ┌───────────────┐
+        │      API      │
+        └──────┬────────┘
+               │
+               ▼
+        ┌───────────────┐
+        │ Application   │
+        └──────┬────────┘
+               │
+               ▼
+        ┌───────────────┐
+        │    Domain     │
+        └──────┬────────┘
+               ▲
+               │
+        ┌───────────────┐
+        │ Infrastructure│
+        └───────────────┘
 ```
+
+---
+
+## 🎯 Purpose
+
+This project demonstrates the implementation of a scalable backend service using Hexagonal Architecture, focusing on:
+
+- Separation of concerns across layers
+- Domain-driven design principles
+- Decoupled infrastructure using ports and adapters
+- Clean and maintainable code structure
+
+---
 
 ### Layers
 
 - Domain
-  Contains the core business entities, interfaces(Ports) and models
+  Contains the core business entities and interfaces(Ports)
 
 - Application
-  Contains the use cases that coordinates business operations.
+  Contains DTOs and the use cases that coordinates business operations.
 
 - Infrastructure
   Contains implementations of domain ports such as:
@@ -107,14 +135,13 @@ order-service/
     │   └── appsettings.json
     │
     ├── Application/
+    │   ├── DTOs/
     │   └── UseCases/
     │
     ├── Domain/
-    │   ├── Models/
-    │   │
+    │   ├── Entities/
     │   └── Ports/
-    │        ├── Driven/
-    │        └── Driving/
+    │        └── Driven/
     │
     └── Infrastructure/
         │── Adapters/
@@ -135,22 +162,22 @@ Example flow when creating an order:
 Client
   │
   ▼
-OrderController (API Layer)
+OrderController (API)
   │
   ▼
-CreateOrder (Application Layer)
+CreateOrderUseCase (Application)
   │
   ▼
-Order (Domain Model)
+Order (Domain)
   │
   ▼
-IOrderPersistencePort (Domain Port)
+IOrderPersistencePort (Boundary / Port)
   │
   ▼
-OrderPersistenceAdapter (Infrastructure Adapter)
+OrderPersistenceAdapter (Infrastructure)
   │
   ▼
-SQLite Database
+SQLite (Database)
 ```
 This ensures the domain layer remains independent of infrastructure details.
 
@@ -241,17 +268,17 @@ https://github.com/AgricultureOperations/frontend
 
 ## 🧠 Design Decisions
 
-- ✅ Hexagonal architecture for maintainability
+- ✅ Hexagonal architecture to decouple domain logic from infrastructure
 
-- ✅ Domain logic isolated from frameworks
+- ✅ Use of driven ports to abstract persistence layer
 
-- ✅ Ports and adapters pattern
+- ✅ Application layer orchestrates use cases without leaking infrastructure concerns
 
-- ✅ Layered dependency flow
+- ✅ Domain layer remains framework-agnostic
+
+- ✅ DTOs defined at application boundary to isolate transport layer
 
 - ✅ Microservice-ready architecture
-
-- ✅ Clear separation of concerns 
 
 - ✅ Docker-ready deployment
 
@@ -259,21 +286,21 @@ https://github.com/AgricultureOperations/frontend
 
 ## 🔮 Future Improvements
 
-- Add order filtering and pagination
+- Add validation layer using FluentValidation
 
-- Implement order update and cancellation
+- Implement pagination and filtering for orders
 
-- Add DTOs and validation layer
+- Support multiple databases (PostgreSQL)
 
 - Add unit and integration tests
 
 - Introduce API documentation with OpenAPI/Swagger
 
-- Introduce containerization with Docker
-
 - Add CI/CD pipeline with GitHub Actions
 
 - Add container orchestration support
+
+- Support multiple databases (PostgreSQL)
 
 ---
 
