@@ -11,8 +11,10 @@ public class DeleteOrderUseCase: IDeleteOrderUseCase
         this._orderPersistencePort = orderPersistencePort;
     }
 
-    public async Task<Order> Execute(Guid Id)
+    public async Task Execute(Guid Id)
     {
-        return await _orderPersistencePort.DeleteOrder(Id);;
+        var order = await _orderPersistencePort.GetById(Id);
+        if ( order == null ) throw new KeyNotFoundException("Order not found");
+        await _orderPersistencePort.DeleteOrder(order);;
     }
 }

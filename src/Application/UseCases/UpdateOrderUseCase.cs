@@ -13,11 +13,13 @@ public class UpdateOrderUseCase: IUpdateOrderUseCase
         this._orderPersistencePort = orderPersistencePort;
     }
 
-    public async Task<Order> Execute(Guid Id,UpdateOrderRequest Request)
+    public async Task Execute(Guid Id,UpdateOrderRequest request)
     {
-        var order = new Order(Request.customerId,Request.total);
-        await _orderPersistencePort.UpdateOrder(Id,order);
-        return order;
+        var order = await _orderPersistencePort.GetById(Id);
+        if ( order == null ) throw new KeyNotFoundException("Order not found"); 
+        
+        order.UpdateTotal(request.total);
+        await _orderPersistencePort.UpdateOrder(order);
     }
 
 }

@@ -54,18 +54,14 @@ public class OrderController: ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(Guid Id,[FromBody] UpdateOrderRequest Request)
     {
-        var order = await _updateOrderUseCase.Execute(Id,Request);
-        if ( order == null )
-            return NotFound();
-        return Ok(order);
+        await _updateOrderUseCase.Execute(Id,Request);
+        return Ok();
     }
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid Id)
     {
-        var order = await _deleteOrderUseCase.Execute(Id);
-        if ( order == null )
-            return NotFound();
-        return Ok(order);
+        await _deleteOrderUseCase.Execute(Id);
+        return Ok();
     }
 }

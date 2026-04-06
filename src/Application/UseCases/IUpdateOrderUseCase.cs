@@ -5,5 +5,5 @@ namespace Application.UseCases;
 
 public interface IUpdateOrderUseCase
 {
-    Task<Order> Execute(Guid Id, UpdateOrderRequest request);
+    Task Execute(Guid Id, UpdateOrderRequest request);
 }

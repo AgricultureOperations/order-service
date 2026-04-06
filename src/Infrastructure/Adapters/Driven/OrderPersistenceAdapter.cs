@@ -32,26 +32,16 @@ public class OrderPersistenceAdapter: IOrderPersistencePort
             .ToListAsync();
     }
 
-    public async Task UpdateOrder(Guid id,Order order)
+    public async Task UpdateOrder(Order order)
     {
-        var existingOrder = await _orderDbContext.Orders.FirstOrDefaultAsync(e => e.Id == id);
-        if( existingOrder == null )
-            return;
-
-        existingOrder.UpdateOrder(order.CustomerId,order.total);
-        
-        _orderDbContext.Update(existingOrder);
+        _orderDbContext.Update(order);
         await _orderDbContext.SaveChangesAsync();
     }
 
-    public async Task<Order> DeleteOrder(Guid id)
+    public async Task DeleteOrder(Order order)
     {
-        var order = await _orderDbContext.Orders.FirstOrDefaultAsync(e => e.Id == id);
-        if( order == null )
-            throw new KeyNotFoundException("Order not found");
-        
         _orderDbContext.Orders.Remove(order);
         await _orderDbContext.SaveChangesAsync();
-        return order;
+        
     }
 }

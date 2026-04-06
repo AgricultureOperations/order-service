@@ -4,5 +4,5 @@ namespace Application.UseCases;
 
 public interface IDeleteOrderUseCase
 {
-    Task<Order> Execute(Guid Id);
+    Task Execute(Guid Id);
 }
