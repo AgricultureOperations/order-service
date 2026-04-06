@@ -1,32 +1,44 @@
-using Microsoft.EntityFrameworkCore;
-using Application.UseCases;
-using Domain.Ports.Driven;
-using Infrastructure.Adapters.Driven;
-using Infrastructure.Persistence;
+    using Microsoft.EntityFrameworkCore;
+    using Application.UseCases;
+    using Domain.Ports.Driven;
+    using Infrastructure.Adapters.Driven;
+    using Infrastructure.Persistence;
 
-var builder = WebApplication.CreateBuilder(args);
+    var builder = WebApplication.CreateBuilder(args);
 
-builder.WebHost.UseUrls("http://0.0.0.0:8080");
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("DevCorsPolicy", policy =>
+        {
+            policy.WithOrigins("https://agricultureops.netlify.app") // your frontend
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials(); // if you use cookies/auth
+        });
+    });
 
-builder.Services.AddControllers();
+    builder.WebHost.UseUrls("http://0.0.0.0:8080");
 
-builder.Services.AddDbContext<OrderDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+    builder.Services.AddControllers();
 
-builder.Services.AddScoped<IOrderPersistencePort, OrderPersistenceAdapter>();
-builder.Services.AddScoped<ICreateOrderUseCase,CreateOrderUseCase>();
-builder.Services.AddScoped<IGetOrderByIdUseCase,GetByIdOrderUseCase>();
-builder.Services.AddScoped<IGetOrdersUseCase,GetOrdersUseCase>();
-builder.Services.AddScoped<IUpdateOrderUseCase,UpdateOrderUseCase>();
-builder.Services.AddScoped<IDeleteOrderUseCase,DeleteOrderUseCase>();
+    builder.Services.AddDbContext<OrderDbContext>(options =>
+        options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-var app = builder.Build();
+    builder.Services.AddScoped<IOrderPersistencePort, OrderPersistenceAdapter>();
+    builder.Services.AddScoped<ICreateOrderUseCase,CreateOrderUseCase>();
+    builder.Services.AddScoped<IGetOrderByIdUseCase,GetByIdOrderUseCase>();
+    builder.Services.AddScoped<IGetOrdersUseCase,GetOrdersUseCase>();
+    builder.Services.AddScoped<IUpdateOrderUseCase,UpdateOrderUseCase>();
+    builder.Services.AddScoped<IDeleteOrderUseCase,DeleteOrderUseCase>();
 
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
-    db.Database.Migrate();
-}
+    var app = builder.Build();
+    app.UseCors("DevCorsPolicy");
 
-app.MapControllers();
-app.Run();
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
+        db.Database.Migrate();
+    }
+
+    app.MapControllers();
+    app.Run();
