@@ -17,6 +17,7 @@ public class Order
         this.CustomerId = CustomerId;
         this.total = total;
         this.CreatedAt = DateTime.UtcNow;
+        this.StatusId = 1;
     }
 
     public void UpdateStatus(OrderStatus status)
