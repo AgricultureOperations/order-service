@@ -1,11 +1,12 @@
 ﻿using Application.UseCases;
 using Application.DTOs;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Api.Controllers;
 
 [ApiController]
-[Route("api/orders")]
+[Route("api/v1/orders")]
 public class OrderController: ControllerBase
 {
     private readonly ICreateOrderUseCase _createOrderUseCase;
@@ -28,6 +29,7 @@ public class OrderController: ControllerBase
         this._deleteOrderUseCase = deleteOrderUseCase;
     }
 
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody]CreateOrderRequest Request)
     {
@@ -35,6 +37,7 @@ public class OrderController: ControllerBase
         return Ok(order);
     }
 
+    [Authorize]
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(Guid id)
     {
@@ -44,6 +47,7 @@ public class OrderController: ControllerBase
         return Ok(order);
     }
 
+    [Authorize]
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
@@ -51,6 +55,7 @@ public class OrderController: ControllerBase
         return Ok(orders);
     }
 
+    [Authorize]
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(Guid Id,[FromBody] UpdateOrderRequest Request)
     {
@@ -58,6 +63,7 @@ public class OrderController: ControllerBase
         return Ok();
     }
 
+    [Authorize]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid Id)
     {
