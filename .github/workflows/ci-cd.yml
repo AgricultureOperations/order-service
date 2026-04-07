@@ -73,3 +73,13 @@ jobs:
         run: |
           docker push ${{ secrets.DOCKER_USERNAME }}/order-service:${{ github.sha }}
           docker push ${{ secrets.DOCKER_USERNAME }}/order-service:latest
+  
+  deploy:
+
+    runs-on: ubuntu-latest
+    needs: docker
+
+    steps:
+      - name: Trigger Render Deploy
+        run: |
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
