@@ -1,0 +1,50 @@
+
+name: Order Service CI/CD
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - '*.sln'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/**'
+
+jobs:
+
+  build-test:
+    runs-on: ubuntu-latest
+
+    env:
+      # JWT CONFIG
+      Jwt__Secret: ${{ secrets.JWT_SECRET }}
+      Jwt__Issuer: ${{ secrets.JWT_ISSUER }}
+      Jwt__Audience: ${{ secrets.JWT_AUDIENCE }}
+
+      # DATABASE CONFIG (Render or other)
+      ConnectionStrings__DefaultConnection: ${{ secrets.DB_CONNECTION }}
+
+      # APP CONFIG
+      ConnectionStrings__ServerPort: ${{ secrets.SERVER_PORT }}
+      ConnectionStrings__FrontendHost: ${{ secrets.FRONTEND_URL }}
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build project
+        run: dotnet build --no-restore
+
+      - name: Run tests
+        run: dotnet test --no-build --verbosity normal
