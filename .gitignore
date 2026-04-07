@@ -35,6 +35,7 @@ packages/
 # Environment files
 .env
 .env.*
+appsettings.*
 
 # ASP.NET Core secrets
 secrets.json
