@@ -54,19 +54,20 @@ builder.Services.AddAuthentication(options =>
     {
         options.AddPolicy("DevCorsPolicy", policy =>
         {
-            policy.WithOrigins("https://agricultureops.netlify.app") // your frontend
+            policy.WithOrigins(builder.Configuration.GetConnectionString("FrontendHost")!) // your frontend
                   .AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials(); // if you use cookies/auth
         });
     });
 
-    builder.WebHost.UseUrls("http://0.0.0.0:8080");
+    builder.WebHost.UseUrls("http://0.0.0.0:"+builder.Configuration.GetConnectionString("ServerPort")!);
 
     builder.Services.AddControllers();
 
     builder.Services.AddDbContext<OrderDbContext>(options =>
-        options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+        //options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
     builder.Services.AddScoped<IOrderPersistencePort, OrderPersistenceAdapter>();
     builder.Services.AddScoped<ICreateOrderUseCase,CreateOrderUseCase>();
