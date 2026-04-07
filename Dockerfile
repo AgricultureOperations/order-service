@@ -1,36 +1,38 @@
-# ----------- BUILD STAGE -----------
+# ------------------------------
+# Stage 1: Build
+# ------------------------------
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copy csproj files first for better layer caching
-COPY src/Api/Api.csproj src/Api/
-COPY src/Application/Application.csproj src/Application/
-COPY src/Domain/Domain.csproj src/Domain/
-COPY src/Infrastructure/Infrastructure.csproj src/Infrastructure/
+# Copy solution and restore dependencies
+COPY *.sln .
+COPY src/Api/*.csproj ./src/Api/
+COPY src/Application/*.csproj ./src/Application/
+COPY src/Domain/*.csproj ./src/Domain/
+COPY src/Infrastructure/*.csproj ./src/Infrastructure/
 
-# Restore dependencies
-RUN dotnet restore src/Api/Api.csproj
+RUN dotnet restore
 
-# Copy the entire source
-COPY src ./src
+# Copy all source code
+COPY src/ ./src/
 
-# Build
-WORKDIR /src/src/Api
-RUN dotnet build Api.csproj -c Release -o /app/build
+# Build and publish
+RUN dotnet publish src/Api/Api.csproj -c Release -o /app/publish /p:UseAppHost=false
 
-# Publish
-RUN dotnet publish Api.csproj -c Release -o /app/publish /p:UseAppHost=false
-
-
-# ----------- RUNTIME STAGE -----------
+# ------------------------------
+# Stage 2: Runtime
+# ------------------------------
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
-WORKDIR /app
 
-# Copy published files
+# Create non-root user
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
+
+WORKDIR /app
 COPY --from=build /app/publish .
 
-# Expose API port
-EXPOSE 8080
+# Expose port
+EXPOSE 80
 
-# Run the API
+# Start the app
 ENTRYPOINT ["dotnet", "Api.dll"]
