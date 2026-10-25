@@ -1,6 +1,6 @@
 # 🌱 AgriOps Order Service
 
-Order Service is the orders microservice of the **AgricultureOperations (AgriOps)** platform. It exposes JWT-protected CRUD for orders at `/api/v1/orders`.
+Order Service is the orders microservice of the **AgricultureOperations (AgriOps)** platform. It manages sales orders: lines with server-calculated totals, a status workflow (Pending → Confirmed → Shipped → Delivered, or Cancelled), soft delete, configurable order numbers (`ORD-2026-000001`) and per-permission authorization. The API is `/api/v2/orders`; `/api/v1/orders` is kept read-only for older frontends.
 
 It is built with **ASP.NET Core Web API on .NET 9** and **PostgreSQL** (EF Core + Npgsql), and follows a **Hexagonal Architecture (Ports & Adapters)**. That keeps the domain logic independent of frameworks, the database and the HTTP layer.
 
@@ -8,23 +8,28 @@ It is built with **ASP.NET Core Web API on .NET 9** and **PostgreSQL** (EF Core 
 
 ## 🌐 Place in the AgriOps Platform
 
-AgriOps is made of three independent services, each in its own repository with its own CI/CD:
+AgriOps is made of four independent services, each in its own repository with its own CI/CD:
 
 | Service | Stack | Role |
 |---|---|---|
-| [auth-service](https://github.com/AgricultureOperations/auth-service) | Express 5 + TypeScript + SQLite | Users, login, JWT issuance |
-| **order-service** (this repo) | ASP.NET Core (.NET 9) + PostgreSQL | JWT-protected order CRUD |
-| [agriops-web](https://github.com/AgricultureOperations/frontend) | React 18 + Vite | Back-office SPA for both backends |
+| [auth-service](https://github.com/AgricultureOperations/auth-service) | Express 5 + TypeScript + SQLite | Users, login, JWT issuance, RBAC, customers (users with the `customer` role) |
+| **order-service** (this repo) | ASP.NET Core (.NET 9) + PostgreSQL | Sales orders: lines, status workflow, soft delete, order numbering |
+| product-service | NestJS 11 + Prisma + PostgreSQL | Product catalog |
+| [agriops-web](https://github.com/AgricultureOperations/frontend) | React 18 + Vite | Back-office SPA for every backend |
 
 ```
-frontend ──(login/register, users)──▶ auth-service   ──issues JWT──┐
-    │                                                              │ shared secret/issuer/audience
-    └──(Bearer JWT, orders)──────────▶ order-service ◀─validates───┘
+frontend ──(login, users, customers)──▶ auth-service    ──issues JWT──┐
+    │                                                                 │ shared secret/issuer/audience
+    ├──(Bearer JWT, orders)───────────▶ order-service   ◀─validates───┤
+    └──(Bearer JWT, products)─────────▶ product-service ◀─validates───┘
 ```
+
+The order form combines data from all three backends in the browser: it picks the customer from auth-service's `/api/v1/customers` and the products from product-service, then sends order-service their ids together with a snapshot of their data.
 
 - **Tokens are issued by auth-service, not here.** This service validates HS256 tokens against `Jwt:Secret`, `Jwt:Issuer` (`auth-service`) and `Jwt:Audience` (`orders-api`). These values must match auth-service's `JWT_SECRET`, `JWT_ISSUER` and `JWT_AUDIENCE`. If any of them differ, every request returns 401.
 - The backends never call each other. The browser is the only client.
-- This service owns the `Orders` and `OrderStatus` tables exclusively. `Order.customerId` is an auth-service `User.id` (UUID), referenced by ID only: no foreign key and no existence check.
+- This service owns the `Orders`, `OrderLines`, `OrderStatus`, `Settings`, `OrderNumberCounters` and `IdempotencyKeys` tables exclusively. Each order references its **customer** by auth-service id (a user with the `customer` role), with no foreign key or existence check, and keeps a snapshot of the customer's data at order time. Product data is a snapshot too. Orders written before v2 have no customer id.
+- Authorization reads the JWT `permissions` claim: `orders:view|create|edit|delete` and `settings:view|edit` (403 without it).
 
 ---
 
@@ -33,7 +38,7 @@ frontend ──(login/register, users)──▶ auth-service   ──issues JWT�
 - C#, .NET 9, ASP.NET Core Web API
 - Entity Framework Core 9 + Npgsql (PostgreSQL)
 - JWT Bearer authentication (`Microsoft.AspNetCore.Authentication.JwtBearer`)
-- xUnit + Moq for tests
+- xUnit + Moq (unit), WebApplicationFactory + Testcontainers PostgreSQL (integration)
 - Docker (multi-stage), GitHub Actions, Docker Hub, Render
 
 ---
@@ -70,12 +75,15 @@ Project references: `Application → Domain`; `Infrastructure → Domain, Applic
 | Kind | Port | Adapter |
 |---|---|---|
 | Driven (outbound) | `Domain/Ports/Driven/IOrderPersistencePort` | `Infrastructure/Adapters/Driven/OrderPersistenceAdapter` (EF Core → PostgreSQL) |
-| Driving (inbound) | `Application/UseCases/I{Create,GetOrderById,GetOrders,Update,Delete}OrderUseCase` | `Api/Controllers/OrderController` (HTTP) |
+| Driven (outbound) | `IOrderNumberGeneratorPort` | `OrderNumberGeneratorAdapter` (prefix setting + `OrderNumberCounters` per prefix and year) |
+| Driven (outbound) | `IUnitOfWorkPort` | `UnitOfWorkAdapter` (one transaction for numbering + insert) |
+| Driven (outbound) | `ISettingsPersistencePort` | `SettingsPersistenceAdapter` |
+| Driving (inbound) | `Application/UseCases/OrderUseCases.Interfaces.cs` (create, get, list, update, change status, soft delete, statuses, settings) | `Api/Controllers/{Orders,LegacyOrders,OrderSettings,OrderStatuses}Controller` (HTTP) |
 
 - There is no `Ports/Driving` folder yet. The use case interfaces serve as the inbound ports.
 - Each use case is one interface plus one class with a single `Execute(...)` method.
 - `src/Api/Program.cs` is the **only composition root**. Every port → adapter and use case binding is registered there with `AddScoped`.
-- Entities have private setters and change state only through methods such as `UpdateTotal` and `UpdateStatus`, which enforce invariants (for example, the total can't be negative).
+- `Order` is the aggregate: private setters, and every change goes through a method (`UpdateDetails`, `Confirm`, `Ship`, `Deliver`, `Cancel`, `SoftDelete`, `ApplyPaymentBalance`) that enforces the invariants. Totals are always recalculated from the lines (cents, half away from zero).
 
 ### Request flow (create order)
 
@@ -90,57 +98,68 @@ Client ─▶ OrderController (Api) ─▶ CreateOrderUseCase (Application) ─�
 
 ```bash
 order-service/
-├── order-service.sln             # Api, Application, Domain, Infrastructure (not the test project)
+├── order-service.sln             # src projects + both test projects
 ├── Dockerfile
 ├── .github/workflows/ci-cd.yml
 ├── src/
 │   ├── Api/
-│   │   ├── Controllers/OrderController.cs
+│   │   ├── Controllers/          # Orders (v2), LegacyOrders (v1 GET), OrderSettings, OrderStatuses
+│   │   ├── Authorization/        # permission policies, 403 { message } handler, sub → user id
+│   │   ├── Middleware/           # exceptions → { message } + status
 │   │   └── Program.cs            # JWT, CORS, UseUrls, DI, migrations on startup
 │   ├── Application/
-│   │   ├── DTOs/                 # CreateOrderRequest, UpdateOrderRequest
+│   │   ├── DTOs/                 # request + response DTOs and mappers
 │   │   └── UseCases/             # I*UseCase + implementations
 │   ├── Domain/
-│   │   ├── Entities/             # Order, OrderStatus
-│   │   └── Ports/Driven/         # IOrderPersistencePort
+│   │   ├── Entities/             # Order, OrderLine, OrderStatus, PaymentStatus, Setting, value objects
+│   │   ├── Exceptions/           # validation (400), conflict (409), concurrency (409)
+│   │   └── Ports/Driven/         # persistence, order numbers, settings
 │   └── Infrastructure/
-│       ├── Adapters/Driven/      # OrderPersistenceAdapter
-│       ├── Persistence/          # OrderDbContext (seeds OrderStatus)
+│       ├── Adapters/Driven/      # persistence, order number generator, settings
+│       ├── Persistence/          # OrderDbContext (seeds, counters, xmin, soft-delete filter)
 │       └── Migrations/           # EF Core migrations (Npgsql-specific)
 └── test/
-    └── Application/              # xUnit + Moq use case tests
+    ├── Application/              # domain + use case unit tests (xUnit + Moq)
+    └── Api/                      # API integration tests (Testcontainers PostgreSQL)
 ```
 
 ---
 
 ## 🔑 API
 
-All endpoints require `Authorization: Bearer <jwt>` issued by auth-service. JSON is camelCase on the wire.
+All endpoints require `Authorization: Bearer <jwt>` issued by auth-service, plus the permission in the table. JSON is camelCase on the wire. Errors are `{ "message": "..." }` with 400 (validation), 401 (no/invalid token), 403 (missing permission), 404, 409 (invalid transition or stale `version`) or 500.
 
-| Method | Path | Body | Success | Response |
-|---|---|---|---|---|
-| `POST` | `/api/v1/orders` | `{ customerId, total }` | 200 | `Order` |
-| `GET` | `/api/v1/orders` | — | 200 | `Order[]` |
-| `GET` | `/api/v1/orders/{id}` | — | 200 / 404 (empty body) | `Order` |
-| `PUT` | `/api/v1/orders/{id}` | `{ customerId, total }` | 200 | empty |
-| `DELETE` | `/api/v1/orders/{id}` | — | 200 | empty |
+| Method | Path | Permission | Success |
+|---|---|---|---|
+| `GET` | `/api/v2/orders?page&pageSize&search&statusId&paymentStatus&from&to&sort&order` | `orders:view` | 200 `{ data, meta: { page, pageSize, total, totalPages } }` |
+| `GET` | `/api/v2/orders/{id}` | `orders:view` | 200 order with lines / 404 |
+| `POST` | `/api/v2/orders` (optional `Idempotency-Key` header) | `orders:create` | 201 + `Location` |
+| `PUT` | `/api/v2/orders/{id}` (Pending only, body includes `version`) | `orders:edit` | 200 |
+| `POST` | `/api/v2/orders/{id}/confirm`, `/ship`, `/deliver` (`{ version }`), `/cancel` (`{ version, reason }`) | `orders:edit` | 200 |
+| `DELETE` | `/api/v2/orders/{id}` (soft delete; Pending or Cancelled without payments) | `orders:delete` | 204 |
+| `GET` | `/api/v1/order-settings` · `PUT` `{ orderNumberPrefix }` | `settings:view` · `settings:edit` | 200 `{ orderNumberPrefix, nextNumber, updatedAt, updatedBy }` |
+| `GET` | `/api/v1/order-statuses` | `orders:view` | 200 |
+| `GET` | `/api/v1/orders`, `/api/v1/orders/{id}` (**deprecated**, legacy shape, no writes) | `orders:view` | 200 |
 
-`Order` response shape (the domain entity, serialized directly):
+Create request (the server calculates every amount; a client `total` is ignored):
 
 ```json
 {
-  "id": "uuid",
-  "customerId": "uuid",
-  "total": 100.0,
-  "createdAt": "2026-04-07T20:21:46Z",
-  "statusId": 1,
-  "status": { "id": 1, "name": "Pending" }
+  "customer": { "id": "auth-service customer uuid", "name": "Hacienda La Esperanza", "taxId": "0991234567001", "email": "compras@esperanza.ec", "phone": null },
+  "currency": "USD",
+  "notes": "Entregar en bodega 2",
+  "lines": [
+    { "productId": "uuid", "sku": "FERT-UREA-50KG", "productName": "Urea 46% N", "unit": "bag",
+      "quantity": 3, "unitPrice": 25.50, "discountAmount": 0, "taxRate": 0.15 }
+  ]
 }
 ```
 
-Order statuses are seeded reference data: `1 Pending`, `2 Paid`, `3 Shipped`, `4 Delivered`, `5 Cancelled`. New orders start at `1`. The frontend mirrors these IDs, so only append new statuses with new IDs. Never renumber or reuse one.
+The response adds `id`, `orderNumber`, per-line `lineGross/lineSubtotal/lineTax/lineTotal`, `subtotal`, `discountTotal`, `taxTotal`, `total`, `amountPaid`, `balanceDue`, `paymentStatus`, `statusId` + `status`, the timeline (`confirmedAt`, `shippedAt`, `deliveredAt`, `cancelledAt`, `cancelReason`), the audit fields (`createdBy`, `updatedBy`, from the token's `sub`) and `version`.
 
-An invalid, expired or missing token returns 401 with an empty body and a `WWW-Authenticate` header. The frontend reacts by clearing the token and redirecting to `/login`.
+**Statuses** are seeded reference data: `1 Pending`, `2 Paid` (legacy, no longer reachable), `3 Shipped`, `4 Delivered`, `5 Cancelled`, `6 Confirmed`. Only append new ids. **Payment state** (`Unpaid`, `PartiallyPaid`, `Paid`, `Refunded`) is a separate field, reserved for the future payment-service.
+
+**Order numbers** are `{prefix}-{yyyy}-{000000}`. The prefix is a database setting (`ORD` by default, editable through `/api/v1/order-settings`). The counter lives in `OrderNumberCounters`, keyed by prefix and year: it restarts at 000001 every year and for every new prefix. It's taken inside the same transaction as the insert, so numbers are unique and gapless, even with concurrent requests.
 
 ---
 
@@ -156,7 +175,8 @@ An invalid, expired or missing token returns 401 with an empty body and a `WWW-A
 
   Commit the migration, its `.Designer.cs` and the updated `OrderDbContextModelSnapshot.cs` together with the entity or `OrderDbContext` change.
 - **Never edit or delete a migration that has been pushed to `main`.** Fix mistakes with a new migration.
-- Migrations must be backward compatible with the running code (expand → migrate → contract). Add nullable or defaulted columns first, and drop old ones in a later release. A rename is add + copy + drop across releases.
+- Migrations must be backward compatible with the running code (expand → migrate → contract). Add nullable or defaulted columns first, and drop old ones in a later release. A rename is add + copy + drop across releases. That's why the legacy column `Orders.total` keeps its name and type.
+- `OrderMaintainerV2` adds lines, settings, idempotency keys, soft delete, audit and payment-copy columns, and backfills existing rows (order numbers oldest first; `Paid` → `Confirmed` + `PaymentStatus = Paid`). `test/Api/MigrationTests.cs` runs it against a pre-v2 database.
 
 ---
 
@@ -198,15 +218,14 @@ The API is served on `http://localhost:8080`.
 
 ## 🧪 Testing
 
-The test project is **not** in `order-service.sln`, so point commands at it directly:
-
 ```bash
+dotnet test                                          # both projects (CI runs the same)
 dotnet test test/Application/Application.Tests.csproj
-dotnet test test/Application/Application.Tests.csproj --filter "FullyQualifiedName~CreateOrderUseCasesTest"
+dotnet test test/Api/Api.Tests.csproj                # needs Docker (Testcontainers starts postgres:15-alpine)
 ```
 
-- Use case tests mock `IOrderPersistencePort` with Moq. No database is needed.
-- The test project targets `net10.0`, while the service and CI use .NET 9, so running the tests needs the .NET 10 SDK.
+- `test/Application`: domain rules (totals, rounding, transitions, soft delete, payment balance) and use cases with a mocked port. No database needed.
+- `test/Api`: the real API through `WebApplicationFactory` against a throwaway PostgreSQL. It covers 401/403 per permission, the full lifecycle, 409s, idempotency and concurrent numbering, soft delete, list filters, the legacy v1 shape, and the migration backfill.
 
 ---
 
@@ -223,9 +242,9 @@ docker run -p 8080:8080 \
 ```
 
 - Multi-stage build: `dotnet/sdk:9.0` publishes `src/Api` (tests are excluded), and `dotnet/aspnet:9.0` runs it as the non-root `appuser`.
-- The container listens on `ConnectionStrings__ServerPort`. **The Dockerfile's `EXPOSE 80` is wrong**, so map the host port to `ServerPort`, not to 80.
+- The container listens on `ConnectionStrings__ServerPort` (`EXPOSE 8080` documents the usual value). Map the host port to `ServerPort`.
 - From inside a container, reach a Postgres on your machine with `host.docker.internal`, not `localhost`.
-- **Never push a locally built image.** `.dockerignore` doesn't exclude `appsettings*.json` yet, so local builds contain your local config. CI images don't, because those files are absent from the checkout.
+- `.dockerignore` excludes `appsettings*.json`, `.env*` and `test/`, and the build restores only `src/Api`.
 
 ### Full stack with docker compose
 
@@ -237,7 +256,7 @@ docker compose up -d --build order-service
 docker compose logs -f order-service
 ```
 
-To check the JWT link end to end, log in through auth-service, then call `GET /api/v1/orders` with the token. A 401 means the JWT settings differ between the two services.
+To check the JWT link end to end, log in through auth-service, then call `GET /api/v2/orders` with the token. A 401 means the JWT settings differ between the two services, and a 403 means the token has no `orders:view` permission.
 
 ---
 
@@ -245,7 +264,7 @@ To check the JWT link end to end, log in through auth-service, then call `GET /a
 
 `.github/workflows/ci-cd.yml` runs on pushes to `main` that touch `src/`, `test/`, the `.sln`, `Dockerfile`, `.dockerignore` or workflows:
 
-1. **build-test:** `dotnet restore`, `build` and `test` on .NET 9, with config from GitHub secrets. Because the test project is outside the `.sln`, this step currently runs **no tests**.
+1. **build-test:** `dotnet restore`, `build` and `test` on .NET 9 (unit + integration; the runner's Docker hosts the Testcontainers database).
 2. **docker:** build and push `<DOCKER_USERNAME>/order-service:{sha,latest}` to Docker Hub.
 3. **deploy:** trigger the Render deploy hook. Migrations run when the new container starts.
 
@@ -253,32 +272,33 @@ To check the JWT link end to end, log in through auth-service, then call `GET /a
 
 ## ⚠️ Known Issues
 
-- **Missing orders on update or delete return a 500**, not a 404. The use cases throw `KeyNotFoundException`, and there is no exception handling middleware. A negative total on update (`ArgumentException`) is also a 500. Move these to the correct 4xx status with a `{ message }` body.
-- **`POST` returns 200**, not 201 with the created resource.
-- **The controller returns the domain entity directly.** Add response DTOs in `Application/DTOs/` before exposing new fields, so domain refactors don't break the API.
-- **`customerId` is taken from the request body**, not from the token's `id` claim, and there is no ownership check. `PUT` accepts `customerId` but only updates `total`.
-- `CreateOrderUseCase` doesn't reject a negative total (only `UpdateTotal` does).
-- `Dockerfile` `EXPOSE 80` and the missing `appsettings*` entry in `.dockerignore` (see Docker).
-- The CI test step runs no tests (see CI/CD).
+- Line prices are a snapshot sent by the browser from product-service. order-service validates them but can't check them against the catalog (services don't call each other).
+- The customer id is not verified against auth-service either. A customer deleted later remains on its orders as a snapshot.
+- The deprecated `GET /api/v1/orders` returns every order unpaginated. Remove it once no deployed frontend reads it.
+
+---
+
+## 📦 Deploying v2
+
+1. **auth-service first.** It must issue the `orders:*`, `customers:*` and `settings:*` permissions and serve `/api/v1/customers`. Without them every order request is 403, and the order form can't pick a customer.
+2. **order-service.** On startup the `OrderMaintainerV2` migration runs once. It numbers existing orders per year, oldest first (`ORD-2025-000001`, `ORD-2026-000001`, …), seeds the counters and turns `Paid` orders into `Confirmed` + `PaymentStatus = Paid`. The old `GET /api/v1/orders` keeps working for the frontend that is still deployed.
+3. **frontend**, which switches to `/api/v2/orders`.
 
 ---
 
 ## 🔮 Future Improvements
 
-- Consistent error handling (`{ message }` bodies, 400/404 instead of 500)
-- Response DTOs and validation (FluentValidation)
-- Ownership: read the user ID from the JWT `id` claim
-- Pagination and filtering for `GET /api/v1/orders`
+- Payments in a separate payment-service, applied through `Order.ApplyPaymentBalance` from a broker event (see the workspace roadmap)
+- A customers maintainer screen in the frontend (auth-service already has `/api/v1/customers`)
 - OpenAPI / Swagger documentation
-- Add the test project to the solution so CI runs it
 
 ---
 
 ## 🤝 Contributing
 
 - Keep `Domain` free of framework types and register every new port, adapter and use case in `Program.cs`.
-- Keep every route under `/api/v1/`. A breaking change needs a new version served alongside v1, because the frontend (Netlify) and this service (Render) deploy independently.
-- Changing an entity's serialized shape or a DTO requires updating the frontend mirror in `features/orders/interfaces/` in the agriops-web repo, with coordinated deploys.
+- A breaking change needs a new route version served alongside the old one (as `/api/v2/orders` did), because the frontend (Netlify) and this service (Render) deploy independently.
+- Changing a response or request DTO requires updating the frontend mirror in `features/orders/interfaces/` in the agriops-web repo, with coordinated deploys.
 
 ---
 

@@ -4,14 +4,13 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copy solution and restore dependencies
-COPY *.sln .
+# Restore the API only: the .sln also lists the test projects, which are not copied into the image
 COPY src/Api/*.csproj ./src/Api/
 COPY src/Application/*.csproj ./src/Application/
 COPY src/Domain/*.csproj ./src/Domain/
 COPY src/Infrastructure/*.csproj ./src/Infrastructure/
 
-RUN dotnet restore
+RUN dotnet restore src/Api/Api.csproj
 
 # Copy all source code
 COPY src/ ./src/
@@ -31,8 +30,8 @@ USER appuser
 WORKDIR /app
 COPY --from=build /app/publish .
 
-# Expose port
-EXPOSE 80
+# Documentation only: the app listens on ConnectionStrings__ServerPort (8080 in compose and on Render)
+EXPOSE 8080
 
 # Start the app
 ENTRYPOINT ["dotnet", "Api.dll"]

@@ -8,3 +8,7 @@
 Dockerfile
 README.md
 *.sqlite
+**/appsettings.*.json
+**/appsettings.json
+**/.env*
+test/

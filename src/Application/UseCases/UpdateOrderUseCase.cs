@@ -1,25 +1,30 @@
-﻿using Application.DTOs;
+using Application.DTOs;
 using Domain.Entities;
+using Domain.Exceptions;
 using Domain.Ports.Driven;
 
 namespace Application.UseCases;
 
-public class UpdateOrderUseCase: IUpdateOrderUseCase
+public class UpdateOrderUseCase : IUpdateOrderUseCase
 {
     private readonly IOrderPersistencePort _orderPersistencePort;
+    private readonly TimeProvider _clock;
 
-    public UpdateOrderUseCase(IOrderPersistencePort orderPersistencePort)
+    public UpdateOrderUseCase(IOrderPersistencePort orderPersistencePort, TimeProvider clock)
     {
-        this._orderPersistencePort = orderPersistencePort;
+        _orderPersistencePort = orderPersistencePort;
+        _clock = clock;
     }
 
-    public async Task Execute(Guid Id,UpdateOrderRequest request)
+    public async Task<Order> Execute(Guid id, UpdateOrderRequest request, Guid? userId)
     {
-        var order = await _orderPersistencePort.GetById(Id);
-        if ( order == null ) throw new KeyNotFoundException("Order not found"); 
-        
-        order.UpdateTotal(request.total);
-        await _orderPersistencePort.UpdateOrder(order);
-    }
+        var order = await _orderPersistencePort.GetById(id) ?? throw new KeyNotFoundException("Order not found");
+        if (order.Version != request.Version) throw new ConcurrencyConflictException();
 
+        var (customerId, customer) = request.ToCustomer();
+        order.UpdateDetails(customerId, customer, request.Currency, request.Notes, request.ToLines(),
+            userId, _clock.GetUtcNow().UtcDateTime);
+        await _orderPersistencePort.UpdateOrder(order, request.Version);
+        return order;
+    }
 }
