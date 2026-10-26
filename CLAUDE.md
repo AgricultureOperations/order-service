@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Order Service is an ASP.NET Core Web API (.NET 9) microservice of the AgricultureOperations platform. It owns sales orders: order lines with server-calculated totals, a status workflow, soft delete, configurable order numbers and per-permission authorization. The maintainer API is `api/v2/orders`. The deprecated `api/v1/orders` is kept read-only for frontends deployed before v2. Tokens are issued by auth-service (issuer `auth-service`, audience `orders-api`).
+Order Service is an ASP.NET Core Web API (.NET 9) microservice of the AgricultureOperations platform. It owns sales orders: order lines with server-calculated totals, a status workflow, soft delete, configurable order numbers and per-permission authorization. The maintainer API is `api/v2/orders`. The deprecated `api/v1/orders` is kept read-only for dashboards deployed before v2. Tokens are issued by auth-service (issuer `auth-service`, audience `orders-api`).
 
 ## Architectural Pattern
 
@@ -27,7 +27,7 @@ Project references: `Application → Domain`; `Infrastructure → Domain, Applic
 ## Domain Rules (`src/Domain/Entities/`)
 
 - **`Order` is the aggregate.** Every change goes through a method: `Create`, `UpdateDetails`, `Confirm`, `Ship`, `Deliver`, `Cancel(reason)`, `SoftDelete`, `ApplyPaymentBalance`. Setters are private. A broken rule throws `DomainValidationException` (400) or `DomainConflictException` (409).
-- **Totals are calculated, never accepted.** Each `OrderLine` computes `LineGross = round(qty × price)`, `LineSubtotal = gross − discount` and `LineTax = round(subtotal × taxRate)`. The order sums them. Rounding is to cents, half away from zero (`Money.Round`). Quantity allows 3 decimals, price and discount 2, and `taxRate` is a fraction from 0 to 1. The frontend's `utils/order-money.ts` mirrors these rules for its preview.
+- **Totals are calculated, never accepted.** Each `OrderLine` computes `LineGross = round(qty × price)`, `LineSubtotal = gross − discount` and `LineTax = round(subtotal × taxRate)`. The order sums them. Rounding is to cents, half away from zero (`Money.Round`). Quantity allows 3 decimals, price and discount 2, and `taxRate` is a fraction from 0 to 1. The dashboard's `utils/order-money.ts` mirrors these rules for its preview.
 - **Lines are a product snapshot** (`ProductId`, `Sku`, `ProductName`, `Unit`, price). order-service can't call product-service, so it validates the snapshot but doesn't verify it against the catalog.
 - **The customer is an auth-service user with the `customer` role.** The request sends `customer: { id, name, taxId, email, phone }` as the browser read it from auth-service `/api/v1/customers`. The order stores `CustomerId` (required for new orders, checked in `OrderRequestMapper` before a number is taken) plus a snapshot of the other fields (`CustomerName`, `CustomerTaxId`, `CustomerEmail`, `CustomerPhone`). The snapshot keeps the data as it was at order time, and order-service can't verify the id because services don't call each other. `CustomerId` is null only on pre-v2 rows.
 - **Status machine** (`OrderStatusIds`, append-only): Pending(1) → Confirmed(6) → Shipped(3) → Delivered(4). Pending or Confirmed → Cancelled(5) requires a reason and `AmountPaid == 0`. Lines can only be edited while Pending, and `Confirm` needs at least one line. **Paid(2) is legacy**: it stays seeded, but nothing transitions to it.
@@ -55,13 +55,13 @@ Project references: `Application → Domain`; `Infrastructure → Domain, Applic
 | `PUT /api/v2/orders/{id}` | `orders:edit` | Replaces customer (`{ id, name, taxId, email, phone }`), notes and lines. Pending only, and needs `version` |
 | `POST /api/v2/orders/{id}/confirm`, `/ship`, `/deliver`, `/cancel` | `orders:edit` | Body `{ version }` (`cancel` also needs `reason`). Returns the order |
 | `DELETE /api/v2/orders/{id}` | `orders:delete` | Soft delete, 204 |
-| `GET /api/v1/orders`, `/api/v1/orders/{id}` | `orders:view` | **Deprecated**, legacy shape `{ id, customerId, total, createdAt, statusId, status }` for frontends deployed before v2. The v1 writes were removed. Delete these routes once no deployed frontend reads them |
+| `GET /api/v1/orders`, `/api/v1/orders/{id}` | `orders:view` | **Deprecated**, legacy shape `{ id, customerId, total, createdAt, statusId, status }` for dashboards deployed before v2. The v1 writes were removed. Delete these routes once no deployed dashboard reads them |
 | `GET`, `PUT /api/v1/order-settings` | `settings:view` / `settings:edit` (admin only by default in auth-service) | `{ orderNumberPrefix, nextNumber, updatedAt, updatedBy }` |
 | `GET /api/v1/order-statuses` | `orders:view` | Status lookup |
 
 - **Authorization (RBAC Phase 2).** One policy per permission code (`Api/Authorization/Permissions.cs`: `orders:*` and `settings:view|edit`), reading the JWT `permissions` claim. `MapInboundClaims = false` keeps `sub` and `permissions` as issued. A token without the code gets **403** `{ message }` (`JsonAuthorizationResultHandler`). A missing, invalid or expired token gets **401** `{ message: "Unauthorized" }` plus `WWW-Authenticate: Bearer`. Never return 401 for "not allowed": the frontend logs out on any 401.
 - **Errors.** `ErrorHandlingMiddleware` maps `KeyNotFoundException` → 404, `DomainConflictException` → 409, `DomainValidationException`/`ArgumentException` → 400, and anything else → 500 "Internal Server Error" (logged). Model-binding errors are 400 `{ message }` (`InvalidModelStateResponseFactory`). CORS runs before the middleware, so error responses keep their CORS headers.
-- **Responses are DTOs** (`Application/DTOs/OrderResponses.cs`, mapped by `OrderResponseMapper`). Never serialize entities. The frontend mirrors them in `features/orders/interfaces/`, so change both together.
+- **Responses are DTOs** (`Application/DTOs/OrderResponses.cs`, mapped by `OrderResponseMapper`). Never serialize entities. The dashboard mirrors them in `dashboard/src/features/orders/interfaces/`, so change both together.
 
 ## Key Folder Responsibilities
 
@@ -105,6 +105,7 @@ dotnet test test/Api/Api.Tests.csproj                             # API + EF + m
 dotnet test test/Api/Api.Tests.csproj --filter "FullyQualifiedName~MigrationTests"
 ```
 - `test/Application/`: `Domain/OrderTests.cs` covers totals, rounding, every allowed and forbidden transition, soft delete, payment balance versioning and value objects. `UseCases/OrderUseCaseTests.cs` covers the use cases against a mocked port, with `Support/TestData.cs` (`FixedClock`).
+- `test/Api/` needs a reachable Docker daemon (Docker Desktop running, and not blocked by a sandbox): without it all 45 tests fail in about 100 ms with `DockerUnavailableException`, which is an environment problem, not a code one.
 - `test/Api/` boots the real `Program` through `WebApplicationFactory` against a throwaway `postgres:15-alpine` container started by **Testcontainers**. Configuration comes from env vars set in `Support/ApiFactory.cs`, because `Program.cs` reads config before the factory could inject it. Tokens are minted with the test secret (`ApiFactory.Token(permissions)`). The classes share one database in the `"api"` collection and run serially, so tests that change shared state (the prefix) restore it. They cover 401 vs 403 per permission (`settings:*` included), the lifecycle, 409s, idempotency (including concurrent requests), gapless concurrent numbering, a failed create not consuming a number, per-prefix counters, the year rollover (`YearRolloverTests` swaps `TimeProvider` with `WithWebHostBuilder`), soft delete, list filters, the legacy v1 shape, and the migration backfill on a pre-v2 database.
 
 ## Configuration
@@ -117,4 +118,4 @@ dotnet test test/Api/Api.Tests.csproj --filter "FullyQualifiedName~MigrationTest
 
 `.github/workflows/ci-cd.yml` runs on pushes to `main`: build and test (both test projects; the integration tests need the runner's Docker for Testcontainers), then push `order-service:{sha,latest}` to Docker Hub, then deploy through a Render deploy hook. Migrations run when the new container starts.
 
-**Deploy order for v2:** deploy order-service first. It still serves `GET /api/v1/orders` to the old frontend. Then deploy the frontend, which calls `/api/v2/orders`. auth-service must already issue the `permissions` claim, including `customers:*` and `settings:*` (migration `003_customer_fields` + seed `grants:customers-v1`), and serve `/api/v1/customers`. Otherwise every order request is 403 and the order form can't pick a customer.
+**Deploy order for v2:** deploy order-service first. It still serves `GET /api/v1/orders` to the old dashboard. Then deploy the dashboard, which calls `/api/v2/orders`. auth-service must already issue the `permissions` claim, including `customers:*` and `settings:*` (migration `003_customer_fields` + seed `grants:customers-v1`), and serve `/api/v1/customers`. Otherwise every order request is 403 and the order form can't pick a customer.

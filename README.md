@@ -8,23 +8,24 @@ It is built with **ASP.NET Core Web API on .NET 9** and **PostgreSQL** (EF Core 
 
 ## 🌐 Place in the AgriOps Platform
 
-AgriOps is made of four independent services, each in its own repository with its own CI/CD:
+AgriOps is made of five independent apps and services, each in its own repository with its own CI/CD:
 
-| Service | Stack | Role |
-|---|---|---|
-| [auth-service](https://github.com/AgricultureOperations/auth-service) | Express 5 + TypeScript + SQLite | Users, login, JWT issuance, RBAC, customers (users with the `customer` role) |
-| **order-service** (this repo) | ASP.NET Core (.NET 9) + PostgreSQL | Sales orders: lines, status workflow, soft delete, order numbering |
-| product-service | NestJS 11 + Prisma + PostgreSQL | Product catalog |
-| [agriops-web](https://github.com/AgricultureOperations/frontend) | React 18 + Vite | Back-office SPA for every backend |
+| App / service | Repository | Stack | Role |
+|---|---|---|---|
+| auth-service | [edwardcruzcruz/typescript-jwt-auth-api](https://github.com/edwardcruzcruz/typescript-jwt-auth-api) | Express 5 + TypeScript + SQLite | Login, JWT issuance, users, roles & permissions (RBAC), customers |
+| **order-service** (this repo) | [edwardcruzcruz/order-service](https://github.com/edwardcruzcruz/order-service) | ASP.NET Core (.NET 9) + PostgreSQL | Sales orders: lines, status workflow, soft delete, yearly order numbering |
+| product-service | [AgricultureOperations/product-service](https://github.com/AgricultureOperations/product-service) | NestJS 11 + Prisma + PostgreSQL | Product catalog (inputs, harvest, equipment) |
+| dashboard | [edwardcruzcruz/agriops-web](https://github.com/edwardcruzcruz/agriops-web) | React 18 + Vite | Internal back office (staff) for every backend |
+| frontend | not on GitHub yet | Next.js 16, static export | Public customer portal: signup, login, account |
 
 ```
-frontend ──(login, users, customers)──▶ auth-service    ──issues JWT──┐
+dashboard ──(login, users, customers)─▶ auth-service    ──issues JWT──┐
     │                                                                 │ shared secret/issuer/audience
     ├──(Bearer JWT, orders)───────────▶ order-service   ◀─validates───┤
     └──(Bearer JWT, products)─────────▶ product-service ◀─validates───┘
 ```
 
-The order form combines data from all three backends in the browser: it picks the customer from auth-service's `/api/v1/customers` and the products from product-service, then sends order-service their ids together with a snapshot of their data.
+The dashboard's order form combines data from all three backends in the browser: it picks the customer from auth-service's `/api/v1/customers` and the products from product-service, then sends order-service their ids together with a snapshot of their data.
 
 - **Tokens are issued by auth-service, not here.** This service validates HS256 tokens against `Jwt:Secret`, `Jwt:Issuer` (`auth-service`) and `Jwt:Audience` (`orders-api`). These values must match auth-service's `JWT_SECRET`, `JWT_ISSUER` and `JWT_AUDIENCE`. If any of them differ, every request returns 401.
 - The backends never call each other. The browser is the only client.
@@ -185,7 +186,7 @@ The response adds `id`, `orderNumber`, per-line `lineGross/lineSubtotal/lineTax/
 ### 1. Clone and restore
 
 ```bash
-git clone https://github.com/AgricultureOperations/order-service
+git clone https://github.com/edwardcruzcruz/order-service
 cd order-service
 dotnet restore
 ```
@@ -248,7 +249,7 @@ docker run -p 8080:8080 \
 
 ### Full stack with docker compose
 
-The workspace root's `docker-compose.yml` runs postgres (with a health check that order-service waits for), auth-service, order-service and the frontend. It builds the connection string and the `Jwt__*` values from the root `.env`.
+The workspace root's `docker-compose.yml` runs postgres (with a health check that order-service waits for), auth-service, order-service, product-service, the dashboard and the customer portal. It builds the connection string and the `Jwt__*` values from the root `.env`.
 
 ```bash
 # from the workspace root
@@ -274,7 +275,7 @@ To check the JWT link end to end, log in through auth-service, then call `GET /a
 
 - Line prices are a snapshot sent by the browser from product-service. order-service validates them but can't check them against the catalog (services don't call each other).
 - The customer id is not verified against auth-service either. A customer deleted later remains on its orders as a snapshot.
-- The deprecated `GET /api/v1/orders` returns every order unpaginated. Remove it once no deployed frontend reads it.
+- The deprecated `GET /api/v1/orders` returns every order unpaginated. Remove it once no deployed dashboard reads it.
 
 ---
 
@@ -282,14 +283,14 @@ To check the JWT link end to end, log in through auth-service, then call `GET /a
 
 1. **auth-service first.** It must issue the `orders:*`, `customers:*` and `settings:*` permissions and serve `/api/v1/customers`. Without them every order request is 403, and the order form can't pick a customer.
 2. **order-service.** On startup the `OrderMaintainerV2` migration runs once. It numbers existing orders per year, oldest first (`ORD-2025-000001`, `ORD-2026-000001`, …), seeds the counters and turns `Paid` orders into `Confirmed` + `PaymentStatus = Paid`. The old `GET /api/v1/orders` keeps working for the frontend that is still deployed.
-3. **frontend**, which switches to `/api/v2/orders`.
+3. **dashboard** (internal back office), which switches to `/api/v2/orders`.
 
 ---
 
 ## 🔮 Future Improvements
 
 - Payments in a separate payment-service, applied through `Order.ApplyPaymentBalance` from a broker event (see the workspace roadmap)
-- A customers maintainer screen in the frontend (auth-service already has `/api/v1/customers`)
+- A customers maintainer screen in the dashboard (auth-service already has `/api/v1/customers`)
 - OpenAPI / Swagger documentation
 
 ---
@@ -297,8 +298,8 @@ To check the JWT link end to end, log in through auth-service, then call `GET /a
 ## 🤝 Contributing
 
 - Keep `Domain` free of framework types and register every new port, adapter and use case in `Program.cs`.
-- A breaking change needs a new route version served alongside the old one (as `/api/v2/orders` did), because the frontend (Netlify) and this service (Render) deploy independently.
-- Changing a response or request DTO requires updating the frontend mirror in `features/orders/interfaces/` in the agriops-web repo, with coordinated deploys.
+- A breaking change needs a new route version served alongside the old one (as `/api/v2/orders` did), because the dashboard (Netlify) and this service (Render) deploy independently.
+- Changing a response or request DTO requires updating the dashboard mirror in `src/features/orders/interfaces/` (the dashboard repo), with coordinated deploys.
 
 ---
 
